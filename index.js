@@ -5,14 +5,8 @@ const app = express();
 
 app.use(express.json());
 
-// 1. Add eslint
-// 2. return the data created/updated
-// 3. validate provided data by user
-
-// function to check if the data provided by the user is valid
-
 const isValid = (body) => {
-  if (body.username && body.title && body.text) {
+  if (body !== null && body.username && body.title && body.text) {
     return true;
   }
   return false;
@@ -25,7 +19,7 @@ app.get('/posts', async (req, res) => {
     res.json(posts);
   } catch (err) {
     console.error(err);
-    res.status(500).send('Internal Server Error');
+    res.status(500).send({ message: 'Internal Server Error' });
   }
 });
 
@@ -33,14 +27,26 @@ app.post('/posts', async (req, res) => {
   try {
     const newPostData = req.body;
     if (isValid(newPostData)) {
-      await db('posts').insert(newPostData);
-      res.status(200).json({ message: 'Success', body: newPostData });
+      const insertedIds = await db('posts').insert(newPostData);
+      const createdPost = await db('posts').where({ id: insertedIds[0] }).first();
+      res.status(200).json(createdPost);
     } else {
       res.status(400).json({ message: 'Error creating a new post. Data is not valid.' });
     }
   } catch (err) {
     console.error(err);
-    res.status(500).json({ message: 'Error creating new post', error: err });
+    res.status(500).json({ message: 'Error creating new post' });
+  }
+});
+
+app.get('/posts/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const post = await db('posts').where({ id }).first();
+    res.status(200).json(post);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Error getting the post' });
   }
 });
 
@@ -48,27 +54,40 @@ app.put('/posts/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const updatedData = req.body;
+
     if (isValid(updatedData)) {
-      await db('posts').where({ id }).update(updatedData);
-      res.status(200).json({ message: 'Post is updated!', body: updatedData });
+      const updatedId = await db('posts').where({ id }).update(updatedData);
+      const updatedPost = await db('posts').where({ id: updatedId }).first();
+
+      res.status(200).json(updatedPost);
     } else {
       res.status(400).json({ message: 'Error upddating the post. Data is not valid.' });
     }
   } catch (err) {
-    res.status(500).json({ message: 'Error updating the post', error: err });
+    console.error(err);
+    res.status(500).json({ message: 'Error updating the post' });
   }
 });
 
 app.delete('/posts/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    await db('posts').select('id').where('id', id).del();
-    res.status(200).json({ message: 'Success' });
+    await db('posts').where({ id }).del();
+    res.status(200).json({ message: `Post with id: ${id} successfully deleted` });
   } catch (err) {
-    res.status(500).json({ message: 'Error deleting the post', error: err });
+    res.status(500).json({ message: 'Error deleting the post' });
   }
 });
 
+app.use((err, req, res, next) => {
+  console.error(err);
+  res.status(500).json({ message: 'Internal Server Error' });
+});
+
 app.listen(process.env.PORT, () => {
+  if (!process.env.HOST) {
+    throw new Error('DB is not connected. ENV variable HOST not found');
+  }
+
   console.log(`Listening at ${process.env.PORT}`);
 });
