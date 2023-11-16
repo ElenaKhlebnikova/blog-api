@@ -17,7 +17,7 @@ const isValid = (body) => {
 // ----- ROUTES -----
 app.get('/posts', async (req, res) => {
   try {
-    const posts = await db('posts');
+    const posts = await db('posts').orderBy('date', 'desc');
     res.json(posts);
   } catch (err) {
     console.error(err);
