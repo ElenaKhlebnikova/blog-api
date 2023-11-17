@@ -1,10 +1,24 @@
 const express = require('express');
 const db = require('./db/db');
 const cors = require('cors');
+const http = require('http');
+const { Server } = require('socket.io');
 
 const app = express();
-
 app.use(cors());
+
+const server = http.createServer(app);
+
+const io = new Server(server, {
+  cors: {
+    origin: '*',
+  },
+});
+
+io.on('connection', () => {
+  console.log('connected to socket.io');
+});
+
 app.use(express.json());
 
 const isValid = (body) => {
@@ -31,6 +45,7 @@ app.post('/posts', async (req, res) => {
     if (isValid(newPostData)) {
       const insertedIds = await db('posts').insert(newPostData);
       const createdPost = await db('posts').where({ id: insertedIds[0] }).first();
+      io.emit('recieved_new_post');
       res.status(200).json(createdPost);
     } else {
       res.status(400).json({ message: 'Error creating a new post. Data is not valid.' });
@@ -60,7 +75,7 @@ app.put('/posts/:id', async (req, res) => {
     if (isValid(updatedData)) {
       const updatedId = await db('posts').where({ id }).update(updatedData);
       const updatedPost = await db('posts').where({ id: updatedId }).first();
-
+      io.emit('edited_post');
       res.status(200).json(updatedPost);
     } else {
       res.status(400).json({ message: 'Error upddating the post. Data is not valid.' });
@@ -76,20 +91,22 @@ app.delete('/posts/:id', async (req, res) => {
     const { id } = req.params;
     await db('posts').where({ id }).del();
     res.status(200).json({ message: `Post with id: ${id} successfully deleted` });
+    io.emit('deleted_post');
   } catch (err) {
     res.status(500).json({ message: 'Error deleting the post' });
   }
 });
+
+// ------------------------------------------//
 
 app.use((err, req, res, next) => {
   console.error(err);
   res.status(500).json({ message: 'Internal Server Error' });
 });
 
-app.listen(process.env.PORT, () => {
+server.listen(process.env.PORT, () => {
   if (!process.env.HOST) {
     throw new Error('DB is not connected. ENV variable HOST not found');
   }
-
   console.log(`Listening at ${process.env.PORT}`);
 });
